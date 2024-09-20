@@ -9,7 +9,7 @@ This program is a simple file collector that can be used to collect files in a d
 1. Clone the repository
 2. Run the program in the terminal using the following command:
 ```
-python file_collector.py
+python main.py
 ```
 3. The program will ask the user to enter the directory path
 4. The program will ask the user to enter the file extension
