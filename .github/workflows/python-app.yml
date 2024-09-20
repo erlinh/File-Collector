@@ -46,14 +46,18 @@ jobs:
         pyinstaller --onefile --noconsole --name file_collector_app-${{ matrix.platform }} main.py
         cp presets.json dist/presets.json
 
-    - name: Package release (zip)
+    # Package release for Windows
+    - name: Package release (zip) on Windows
+      if: runner.os == 'Windows'
       run: |
-        if [ "${{ matrix.os }}" == "windows-latest" ]; then
-          powershell -Command "Compress-Archive -Path dist/file_collector_app-${{ matrix.platform }}.exe,dist/presets.json -DestinationPath dist/file_collector_app-${{ matrix.platform }}.zip"
-        else
-          cd dist
-          zip file_collector_app-${{ matrix.platform }}.zip file_collector_app-${{ matrix.platform }}${{ matrix.extension }} presets.json
-        fi
+        Compress-Archive -Path "dist\file_collector_app-${{ matrix.platform }}.exe","dist\presets.json" -DestinationPath "dist\file_collector_app-${{ matrix.platform }}.zip"
+
+    # Package release for Linux and macOS
+    - name: Package release (zip) on Unix
+      if: runner.os != 'Windows'
+      run: |
+        cd dist
+        zip file_collector_app-${{ matrix.platform }}.zip file_collector_app-${{ matrix.platform }}${{ matrix.extension }} presets.json
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v3
@@ -66,16 +70,18 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Download Artifacts
+    - name: Download Linux Artifact
       uses: actions/download-artifact@v3
       with:
         name: build-linux
         path: artifacts/linux
-    - uses: actions/download-artifact@v3
+    - name: Download Windows Artifact
+      uses: actions/download-artifact@v3
       with:
         name: build-windows
         path: artifacts/windows
-    - uses: actions/download-artifact@v3
+    - name: Download macOS Artifact
+      uses: actions/download-artifact@v3
       with:
         name: build-macos
         path: artifacts/macos
