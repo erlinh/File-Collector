@@ -1,4 +1,4 @@
-name: Build and Release Tkinter GUI App
+name: Build Tkinter GUI App
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
     branches: [ "main" ]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
@@ -43,9 +43,8 @@ jobs:
       run: |
         pyinstaller --onefile --name file_collector_app-${{ matrix.platform }} main.py
 
-    - name: Upload Release Assets
-      uses: softprops/action-gh-release@v1
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v3
       with:
-        files: dist/file_collector_app-${{ matrix.platform }}${{ matrix.extension }}
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        name: file_collector_app-${{ matrix.platform }}
+        path: dist/file_collector_app-${{ matrix.platform }}${{ matrix.extension }}
