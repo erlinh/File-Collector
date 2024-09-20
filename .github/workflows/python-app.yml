@@ -48,8 +48,12 @@ jobs:
 
     - name: Package release (zip)
       run: |
-        cd dist
-        zip file_collector_app-${{ matrix.platform }}.zip file_collector_app-${{ matrix.platform }}${{ matrix.extension }} presets.json
+        if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+          powershell Compress-Archive -Path dist/file_collector_app-${{ matrix.platform }}.exe,dist/presets.json -DestinationPath dist/file_collector_app-${{ matrix.platform }}.zip
+        else
+          cd dist
+          zip file_collector_app-${{ matrix.platform }}.zip file_collector_app-${{ matrix.platform }}${{ matrix.extension }} presets.json
+        fi
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v3
