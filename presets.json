@@ -1,0 +1,42 @@
+{
+    "None": {
+        "ignore_folders": "",
+        "ignore_filetypes": "",
+        "ignore_filenames": ""
+    },
+    "Node.js": {
+        "ignore_folders": "node_modules,.git,dist,build",
+        "ignore_filetypes": ".log,.ico,.png,.jpg",
+        "ignore_filenames": ""
+    },
+    "React": {
+        "ignore_folders": "node_modules,.git,dist,build",
+        "ignore_filetypes": ".log,.ico,.png,.jpg",
+        "ignore_filenames": ""
+    },
+    "Python": {
+        "ignore_folders": "__pycache__,.git,build,dist",
+        "ignore_filetypes": ".pyc,.log,.png,.jpg",
+        "ignore_filenames": ""
+    },
+    "Java": {
+        "ignore_folders": "bin,.git,build,target",
+        "ignore_filetypes": ".class,.log,.png,.jpg",
+        "ignore_filenames": ""
+    },
+    "C#": {
+        "ignore_folders": "bin,obj,.git,packages",
+        "ignore_filetypes": ".exe,.dll,.pdb,.log",
+        "ignore_filenames": ""
+    },
+    "Go": {
+        "ignore_folders": "vendor,.git",
+        "ignore_filetypes": ".log,.png,.jpg",
+        "ignore_filenames": ""
+    },
+    "Ruby": {
+        "ignore_folders": "vendor,bundle,.git",
+        "ignore_filetypes": ".log,.png,.jpg",
+        "ignore_filenames": ""
+    }
+}
