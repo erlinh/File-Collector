@@ -5,38 +5,83 @@
         "ignore_filenames": ""
     },
     "Node.js": {
-        "ignore_folders": "node_modules,.git,dist,build",
-        "ignore_filetypes": ".log,.ico,.png,.jpg",
-        "ignore_filenames": ""
+        "ignore_folders": "node_modules,.git,dist,build,logs,temp,coverage",
+        "ignore_filetypes": ".log,.lock,.env,.ico,.png,.jpg,.jpeg,.gif,.svg,.DS_Store",
+        "ignore_filenames": "package-lock.json,yarn.lock,npm-debug.log,*.env"
     },
     "React": {
-        "ignore_folders": "node_modules,.git,dist,build",
-        "ignore_filetypes": ".log,.ico,.png,.jpg",
-        "ignore_filenames": ""
+        "ignore_folders": "node_modules,.git,dist,build,logs,temp,coverage",
+        "ignore_filetypes": ".log,.lock,.env,.ico,.png,.jpg,.jpeg,.gif,.svg,.DS_Store",
+        "ignore_filenames": "package-lock.json,yarn.lock,npm-debug.log,*.env"
+    },
+    "Angular": {
+        "ignore_folders": "node_modules,.git,dist,build,e2e,logs,temp,coverage",
+        "ignore_filetypes": ".log,.lock,.env,.ico,.png,.jpg,.jpeg,.gif,.svg,.DS_Store",
+        "ignore_filenames": "package-lock.json,yarn.lock,npm-debug.log,*.env,.editorconfig,.browserslistrc"
+    },
+    "Vue": {
+        "ignore_folders": "node_modules,.git,dist,build,logs,temp,coverage",
+        "ignore_filetypes": ".log,.lock,.env,.ico,.png,.jpg,.jpeg,.gif,.svg,.DS_Store",
+        "ignore_filenames": "package-lock.json,yarn.lock,npm-debug.log,*.env,.editorconfig"
     },
     "Python": {
-        "ignore_folders": "__pycache__,.git,build,dist",
-        "ignore_filetypes": ".pyc,.log,.png,.jpg",
-        "ignore_filenames": ""
+        "ignore_folders": "__pycache__,.git,build,dist,venv,.env,env,logs,temp,coverage",
+        "ignore_filetypes": ".pyc,.pyo,.log,.env,.png,.jpg,.jpeg,.gif,.DS_Store",
+        "ignore_filenames": "Pipfile.lock,requirements.txt,*.env"
     },
     "Java": {
-        "ignore_folders": "bin,.git,build,target",
-        "ignore_filetypes": ".class,.log,.png,.jpg",
-        "ignore_filenames": ""
+        "ignore_folders": "bin,.git,build,target,out,logs,temp,coverage",
+        "ignore_filetypes": ".class,.log,.jar,.war,.ear,.png,.jpg,.jpeg,.gif,.DS_Store",
+        "ignore_filenames": "*.iml,mvnw,mvnw.cmd"
     },
     "C#": {
-        "ignore_folders": "bin,obj,.git,packages",
-        "ignore_filetypes": ".exe,.dll,.pdb,.log",
-        "ignore_filenames": ""
+        "ignore_folders": "bin,obj,.git,packages,logs,temp,coverage,.vs",
+        "ignore_filetypes": ".exe,.dll,.pdb,.cache,.log,.userprefs,.suo,.user,.ico,.png,.jpg,.jpeg,.gif,.DS_Store",
+        "ignore_filenames": "*.csproj.user,*.sln.docstates"
     },
     "Go": {
-        "ignore_folders": "vendor,.git",
-        "ignore_filetypes": ".log,.png,.jpg",
+        "ignore_folders": "vendor,.git,logs,temp,coverage",
+        "ignore_filetypes": ".log,.test,.out,.png,.jpg,.jpeg,.gif,.DS_Store",
         "ignore_filenames": ""
     },
     "Ruby": {
-        "ignore_folders": "vendor,bundle,.git",
-        "ignore_filetypes": ".log,.png,.jpg",
+        "ignore_folders": "vendor,bundle,.git,logs,temp,coverage",
+        "ignore_filetypes": ".log,.gem,.png,.jpg,.jpeg,.gif,.DS_Store",
+        "ignore_filenames": "Gemfile.lock,*.rbc"
+    },
+    "PHP": {
+        "ignore_folders": "vendor,.git,logs,temp,cache,coverage",
+        "ignore_filetypes": ".log,.lock,.env,.png,.jpg,.jpeg,.gif,.DS_Store",
+        "ignore_filenames": "composer.lock,*.env"
+    },
+    "C++": {
+        "ignore_folders": "build,.git,bin,obj,logs,temp,coverage",
+        "ignore_filetypes": ".exe,.dll,.obj,.pdb,.log,.png,.jpg,.jpeg,.gif,.DS_Store",
         "ignore_filenames": ""
+    },
+    "C": {
+        "ignore_folders": "build,.git,bin,obj,logs,temp,coverage",
+        "ignore_filetypes": ".exe,.dll,.obj,.pdb,.log,.png,.jpg,.jpeg,.gif,.DS_Store",
+        "ignore_filenames": ""
+    },
+    "Swift": {
+        "ignore_folders": "build,.git,DerivedData,logs,temp,coverage",
+        "ignore_filetypes": ".log,.xcuserstate,.xcuserdata,.png,.jpg,.jpeg,.gif,.DS_Store",
+        "ignore_filenames": "Podfile.lock"
+    },
+    "Kotlin": {
+        "ignore_folders": ".git,build,out,logs,temp,coverage",
+        "ignore_filetypes": ".class,.log,.jar,.war,.ear,.png,.jpg,.jpeg,.gif,.DS_Store",
+        "ignore_filenames": "*.iml"
+    },
+    "Android": {
+        "ignore_folders": ".git,build,.gradle,logs,temp,coverage",
+        "ignore_filetypes": ".apk,.keystore,.log,.png,.jpg,.jpeg,.gif,.DS_Store",
+        "ignore_filenames": "*.iml,local.properties"
+    },
+    "iOS": {
+        "ignore_folders": ".git,build,DerivedData,logs,temp,coverage",
+        "ignore_filetypes": ".log,.xcuserstate,.xcuserdata,.png,.jpg,.jpeg,.gif,.DS_Store",
+        "ignore_filenames": "Podfile.lock"
     }
 }

@@ -3,12 +3,13 @@ import json
 import logging
 import customtkinter as ctk
 from tkinter import filedialog, messagebox, simpledialog
-from typing import Dict, Any, Set, Optional
+from typing import Dict, Any, Set, Optional, List
 import threading
 import time
 import platform
 import subprocess
 import tkinter as tk
+
 try:
     from watchdog.observers import Observer
     from watchdog.events import FileSystemEventHandler
@@ -28,8 +29,8 @@ class FileChangeHandler(FileSystemEventHandler):
         self.app = app
 
     def on_any_event(self, event):
-        self.app.files_changed = True
-        self.app.update_change_indicator()
+        # Schedule the files_changed update on the main thread
+        self.app.root.after(0, self.app.set_files_changed)
 
 
 class FileCollectorApp:
@@ -43,11 +44,13 @@ class FileCollectorApp:
         self.projects: Dict[str, Dict[str, Any]] = {}
         self.presets: Dict[str, Dict[str, str]] = {}
         self.current_project: Optional[str] = None
-        self.selected_folder_label = None
-        self.auto_run_thread = None
-        self.observer = None
-        self.files_changed = False
+        self.selected_folder_label: Optional[ctk.CTkLabel] = None
+        self.auto_run_thread: Optional[threading.Thread] = None
+        self.observer: Optional[Observer] = None
+        self.files_changed: bool = False
         self.output_files: List[str] = []
+        self.lock = threading.Lock()  # For thread safety
+
         self.load_presets()
         self.load_projects()
 
@@ -232,10 +235,7 @@ class FileCollectorApp:
         action_frame = ctk.CTkFrame(self.main_content_frame)
         action_frame.pack(pady=10)
 
-        self.save_project_btn = ctk.CTkButton(
-            action_frame, text="Save Project", command=self.save_project, width=150
-        )
-        self.save_project_btn.pack(side="left", padx=20)
+        # Removed the Save Project button as per the requirement
 
         self.run_btn = ctk.CTkButton(
             action_frame, text="Run", command=self.run_file_collection, width=150
@@ -306,39 +306,47 @@ class FileCollectorApp:
         ignore_label.pack(pady=10)
 
         # Ignore Folders
-        self.ignore_folders_var = ctk.StringVar()
+        self.ignore_folders_var = tk.StringVar()
         ctk.CTkLabel(self.ignore_tab, text="Folders:").pack(anchor="w", padx=10)
         self.ignore_folders_entry = ctk.CTkEntry(
             self.ignore_tab, textvariable=self.ignore_folders_var
         )
         self.ignore_folders_entry.pack(fill="x", padx=10, pady=5)
+        self.ignore_folders_var.trace_add('write', lambda *args: self.save_project())
 
         # Ignore File Types
-        self.ignore_filetypes_var = ctk.StringVar()
+        self.ignore_filetypes_var = tk.StringVar()
         ctk.CTkLabel(self.ignore_tab, text="File Types:").pack(anchor="w", padx=10)
         self.ignore_filetypes_entry = ctk.CTkEntry(
             self.ignore_tab, textvariable=self.ignore_filetypes_var
         )
         self.ignore_filetypes_entry.pack(fill="x", padx=10, pady=5)
+        self.ignore_filetypes_var.trace_add('write', lambda *args: self.save_project())
 
         # Ignore File Names
-        self.ignore_filenames_var = ctk.StringVar()
+        self.ignore_filenames_var = tk.StringVar()
         ctk.CTkLabel(self.ignore_tab, text="File Names:").pack(anchor="w", padx=10)
         self.ignore_filenames_entry = ctk.CTkEntry(
             self.ignore_tab, textvariable=self.ignore_filenames_var
         )
         self.ignore_filenames_entry.pack(fill="x", padx=10, pady=5)
+        self.ignore_filenames_var.trace_add('write', lambda *args: self.save_project())
 
         # Preset Selection
-        ctk.CTkLabel(self.ignore_tab, text="Preset:").pack(anchor="w", padx=10, pady=5)
-        self.preset_var = ctk.StringVar(value="None")
-        self.preset_menu = ctk.CTkOptionMenu(
-            self.ignore_tab,
-            variable=self.preset_var,
-            values=list(self.presets.keys()),
-            command=self.apply_preset,
-        )
-        self.preset_menu.pack(padx=10, pady=5)
+        ctk.CTkLabel(self.ignore_tab, text="Presets:").pack(anchor="w", padx=10, pady=5)
+        self.preset_vars = {}
+        self.preset_frame = ctk.CTkFrame(self.ignore_tab)
+        self.preset_frame.pack(fill="x", padx=10, pady=5)
+        for preset_name in self.presets.keys():
+            var = tk.BooleanVar(value=False)
+            cb = ctk.CTkCheckBox(
+                self.preset_frame,
+                text=preset_name,
+                variable=var,
+                command=self.update_ignore_settings_from_presets
+            )
+            cb.pack(anchor="w")
+            self.preset_vars[preset_name] = var
 
     def setup_output_tab(self) -> None:
         output_label = ctk.CTkLabel(
@@ -349,7 +357,7 @@ class FileCollectorApp:
         output_label.pack(pady=10)
 
         # Output Path
-        self.output_path_var = ctk.StringVar()
+        self.output_path_var = tk.StringVar()
         path_frame = ctk.CTkFrame(self.output_tab)
         path_frame.pack(fill="x", padx=10, pady=5)
 
@@ -358,13 +366,14 @@ class FileCollectorApp:
             path_frame, textvariable=self.output_path_var
         )
         self.output_path_entry.pack(side="left", fill="x", expand=True, padx=5)
+        self.output_path_var.trace_add('write', lambda *args: self.save_project())
         self.output_path_btn = ctk.CTkButton(
             path_frame, text="Browse", command=self.select_output_path, width=80
         )
         self.output_path_btn.pack(side="right")
 
         # Max File Size
-        self.max_file_size_var = ctk.StringVar(value="1024")
+        self.max_file_size_var = tk.StringVar(value="1024")
         size_frame = ctk.CTkFrame(self.output_tab)
         size_frame.pack(fill="x", padx=10, pady=5)
 
@@ -373,6 +382,7 @@ class FileCollectorApp:
             size_frame, textvariable=self.max_file_size_var, width=100
         )
         self.max_file_size_entry.pack(side="left", padx=5)
+        self.max_file_size_var.trace_add('write', lambda *args: self.save_project())
 
     def setup_output_files_tab(self) -> None:
         self.output_files_frame = ctk.CTkScrollableFrame(self.output_files_tab)
@@ -429,14 +439,15 @@ class FileCollectorApp:
             logging.error(f"Failed to copy content: {e}")
             messagebox.showerror("Error", "Failed to copy file content.")
 
-    def clear_main_content(self) -> None:
-        self.create_main_content_widgets()
-
     def create_new_project(self) -> None:
         project_name = simpledialog.askstring(
             "Project Name", "Enter a name for the new project:"
         )
         if project_name:
+            project_name = project_name.strip()
+            if not project_name:
+                messagebox.showerror("Error", "Project name cannot be empty.")
+                return
             if project_name in self.projects:
                 messagebox.showerror(
                     "Error", "A project with this name already exists."
@@ -449,7 +460,7 @@ class FileCollectorApp:
                 "ignore_filenames": [],
                 "output_path": "",
                 "max_file_size": 1024,
-                "preset": "None",
+                "presets": [],
                 "auto_run": False,
             }
             self.current_project = project_name
@@ -472,8 +483,14 @@ class FileCollectorApp:
             # Load output settings
             self.output_path_var.set(project["output_path"])
             self.max_file_size_var.set(str(project.get("max_file_size", 1024)))
-            # Load preset
-            self.preset_var.set(project.get("preset", "None"))
+            # Load presets
+            selected_presets = project.get("presets", [])
+            for preset_name, var in self.preset_vars.items():
+                if preset_name in selected_presets:
+                    var.set(True)
+                else:
+                    var.set(False)
+            self.update_ignore_settings_from_presets()
             # Load auto-run setting
             self.auto_run_var.set(project.get("auto_run", False))
             self.files_changed = False
@@ -509,6 +526,9 @@ class FileCollectorApp:
                 self.files_changed = True
                 self.update_change_indicator()
                 self.start_file_monitoring()
+                self.save_project()
+            else:
+                messagebox.showinfo("Info", "Folder already added.")
 
     def remove_folder(self) -> None:
         if hasattr(self, "selected_folder_label") and self.selected_folder_label:
@@ -517,6 +537,7 @@ class FileCollectorApp:
             self.files_changed = True
             self.update_change_indicator()
             self.start_file_monitoring()
+            self.save_project()
         else:
             messagebox.showwarning(
                 "No Selection", "Please select a folder to remove."
@@ -526,19 +547,53 @@ class FileCollectorApp:
         output_path = filedialog.askdirectory()
         if output_path:
             self.output_path_var.set(output_path)
+            # self.save_project() will be called due to trace
 
-    def apply_preset(self, event=None) -> None:
-        preset_name = self.preset_var.get()
-        preset = self.presets.get(preset_name, {})
-        self.ignore_folders_var.set(preset.get("ignore_folders", ""))
-        self.ignore_filetypes_var.set(preset.get("ignore_filetypes", ""))
-        self.ignore_filenames_var.set(preset.get("ignore_filenames", ""))
+    def update_ignore_settings_from_presets(self) -> None:
+        ignore_folders = set()
+        ignore_filetypes = set()
+        ignore_filenames = set()
+
+        # Add user's own entries
+        user_ignore_folders = [x.strip() for x in self.ignore_folders_var.get().split(",") if x.strip()]
+        user_ignore_filetypes = [x.strip() for x in self.ignore_filetypes_var.get().split(",") if x.strip()]
+        user_ignore_filenames = [x.strip() for x in self.ignore_filenames_var.get().split(",") if x.strip()]
+
+        ignore_folders.update(user_ignore_folders)
+        ignore_filetypes.update(user_ignore_filetypes)
+        ignore_filenames.update(user_ignore_filenames)
+
+        # Add presets' entries
+        selected_presets = []
+        for preset_name, var in self.preset_vars.items():
+            if var.get():
+                selected_presets.append(preset_name)
+                preset = self.presets.get(preset_name, {})
+                ignore_folders.update([x.strip() for x in preset.get("ignore_folders", "").split(",") if x.strip()])
+                ignore_filetypes.update([x.strip() for x in preset.get("ignore_filetypes", "").split(",") if x.strip()])
+                ignore_filenames.update([x.strip() for x in preset.get("ignore_filenames", "").split(",") if x.strip()])
+
+        # Update the StringVars
+        self.ignore_folders_var.set(",".join(sorted(ignore_folders)))
+        self.ignore_filetypes_var.set(",".join(sorted(ignore_filetypes)))
+        self.ignore_filenames_var.set(",".join(sorted(ignore_filenames)))
+
+        # Update selected presets in project and save
+        if self.current_project and self.current_project in self.projects:
+            self.projects[self.current_project]["presets"] = selected_presets
+            self.save_projects_to_file()
 
     def toggle_auto_run(self) -> None:
         if self.auto_run_var.get():
             self.start_file_monitoring()
         else:
             self.stop_file_monitoring()
+        self.save_project()
+
+    def set_files_changed(self) -> None:
+        with self.lock:
+            self.files_changed = True
+        self.update_change_indicator()
 
     def start_file_monitoring(self) -> None:
         self.stop_file_monitoring()
@@ -546,7 +601,7 @@ class FileCollectorApp:
             event_handler = FileChangeHandler(self)
             self.observer = Observer()
             project = self.projects[self.current_project]
-            folders = project["folders"]
+            folders = [child.cget("text") for child in self.folder_list_frame.winfo_children()]
             for folder in folders:
                 if os.path.exists(folder):
                     self.observer.schedule(event_handler, path=folder, recursive=True)
@@ -563,10 +618,10 @@ class FileCollectorApp:
 
     def auto_run_loop(self) -> None:
         while self.auto_run_var.get():
-            if self.files_changed:
-                self.run_file_collection()
-                self.files_changed = False
-                self.update_change_indicator()
+            with self.lock:
+                if self.files_changed:
+                    self.files_changed = False
+                    self.root.after(0, self.run_file_collection)
             time.sleep(1)
 
     def update_change_indicator(self) -> None:
@@ -587,27 +642,24 @@ class FileCollectorApp:
             return
         project = self.projects[self.current_project]
         output_path = project.get("output_path", "")
-        if output_path and os.path.exists(output_path):
+        output_folder_path = os.path.join(output_path, "outputs")
+        if output_folder_path and os.path.exists(output_folder_path):
             if platform.system() == "Windows":
-                os.startfile(output_path)
+                os.startfile(output_folder_path)
             elif platform.system() == "Darwin":
-                subprocess.Popen(["open", output_path])
+                subprocess.Popen(["open", output_folder_path])
             else:
-                subprocess.Popen(["xdg-open", output_path])
+                subprocess.Popen(["xdg-open", output_folder_path])
         else:
-            messagebox.showwarning("Invalid Path", "Output path does not exist.")
+            messagebox.showwarning("Invalid Path", "Output folder does not exist.")
 
     def save_project(self) -> None:
         if not self.current_project:
-            messagebox.showerror("Error", "No project selected.")
             return
         try:
             max_file_size = int(self.max_file_size_var.get())
         except ValueError:
-            messagebox.showerror(
-                "Invalid Input", "Max file size must be an integer."
-            )
-            return
+            max_file_size = 1024  # Default value
         project = {
             "folders": [
                 child.cget("text") for child in self.folder_list_frame.winfo_children()
@@ -629,12 +681,11 @@ class FileCollectorApp:
             ],
             "output_path": self.output_path_var.get(),
             "max_file_size": max_file_size,
-            "preset": self.preset_var.get(),
+            "presets": [name for name, var in self.preset_vars.items() if var.get()],
             "auto_run": self.auto_run_var.get(),
         }
         self.projects[self.current_project] = project
         self.save_projects_to_file()
-        messagebox.showinfo("Success", "Project saved successfully.")
 
     def save_projects_to_file(self) -> None:
         try:
@@ -679,7 +730,7 @@ class FileCollectorApp:
             return
 
         project = self.projects[self.current_project]
-        folders = project["folders"]
+        folders = [child.cget("text") for child in self.folder_list_frame.winfo_children()]
         ignore_folders: Set[str] = set(project["ignore_folders"])
         ignore_filetypes: Set[str] = set(project["ignore_filetypes"])
         ignore_filenames: Set[str] = set(project["ignore_filenames"])
@@ -692,55 +743,78 @@ class FileCollectorApp:
             ))
             return
 
+        output_folder_path = os.path.join(output_path, "outputs")
+        os.makedirs(output_folder_path, exist_ok=True)
+
         collected_size = 0
         file_index = 1
         output_file_paths = []
         output_file_path = os.path.join(
-            output_path, f"output_{file_index}.txt"
+            output_folder_path, f"{self.current_project}_output_{file_index}.txt"
         )
         output_file_paths.append(output_file_path)
         try:
             output_file = open(output_file_path, "w", encoding="utf-8")
+            try:
+                def write_content(content, header):
+                    nonlocal collected_size, output_file, output_file_paths, file_index
+                    total_content = f"{header}{content}\n\n"
+                    total_content_bytes = total_content.encode('utf-8')
+                    total_length = len(total_content_bytes)
+                    start = 0
+                    while start < total_length:
+                        remaining_space_kb = max_file_size_kb - collected_size
+                        if remaining_space_kb <= 0:
+                            output_file.close()
+                            file_index += 1
+                            output_file_path = os.path.join(
+                                output_folder_path, f"{self.current_project}_output_{file_index}.txt"
+                            )
+                            output_file_paths.append(output_file_path)
+                            output_file = open(output_file_path, "w", encoding="utf-8")
+                            collected_size = 0
+                            remaining_space_kb = max_file_size_kb
+
+                        remaining_space_bytes = int(remaining_space_kb * 1024)
+                        end = start + remaining_space_bytes
+                        chunk_bytes = total_content_bytes[start:end]
+                        chunk = chunk_bytes.decode('utf-8', errors='ignore')
+                        output_file.write(chunk)
+                        chunk_size_kb = len(chunk_bytes) / 1024
+                        collected_size += chunk_size_kb
+                        start = end
+
+                for root_folder in folders:
+                    for root, dirs, files in os.walk(root_folder):
+                        # Remove the output folder from dirs to prevent os.walk() from traversing it
+                        dirs[:] = [d for d in dirs if os.path.join(root, d) != output_folder_path and d not in ignore_folders]
+                        for file in files:
+                            file_path = os.path.join(root, file)
+                            file_ext = os.path.splitext(file)[1]
+                            if (file in ignore_filenames) or (
+                                file_ext in ignore_filetypes
+                            ):
+                                continue
+                            if file_path.startswith(output_folder_path):
+                                continue
+                            try:
+                                with open(file_path, "r", encoding="utf-8") as f:
+                                    content = f.read()
+                                header = f"File: {file_path}\n"
+                                write_content(content, header)
+                            except Exception as e:
+                                logging.warning(f"Failed to read {file_path}: {e}")
+                output_file.close()
+            except Exception as e:
+                output_file.close()
+                logging.error(f"Error during file collection: {e}")
+                self.root.after(0, lambda: messagebox.showerror("Error", f"Error during file collection: {e}"))
+                return
         except IOError as e:
             logging.error(f"Failed to open output file: {e}")
             self.root.after(0, lambda: messagebox.showerror("Error", f"Failed to open output file: {e}"))
             return
 
-        for root_folder in folders:
-            for root, dirs, files in os.walk(root_folder):
-                # Apply ignore folders
-                dirs[:] = [d for d in dirs if d not in ignore_folders]
-                for file in files:
-                    file_path = os.path.join(root, file)
-                    file_ext = os.path.splitext(file)[1]
-                    if (file in ignore_filenames) or (
-                        file_ext in ignore_filetypes
-                    ):
-                        continue
-                    try:
-                        with open(file_path, "r", encoding="utf-8") as f:
-                            content = f.read()
-                        header = f"File: {file_path}\n"
-                        total_content = f"{header}{content}\n\n"
-                        content_size = (
-                            len(total_content.encode("utf-8")) / 1024
-                        )  # in KB
-                        if collected_size + content_size > max_file_size_kb:
-                            output_file.close()
-                            file_index += 1
-                            output_file_path = os.path.join(
-                                output_path, f"output_{file_index}.txt"
-                            )
-                            output_file_paths.append(output_file_path)
-                            output_file = open(
-                                output_file_path, "w", encoding="utf-8"
-                            )
-                            collected_size = 0
-                        output_file.write(total_content)
-                        collected_size += content_size
-                    except Exception as e:
-                        logging.warning(f"Failed to read {file_path}: {e}")
-        output_file.close()
         self.output_files = output_file_paths
         self.files_changed = False
         self.root.after(0, self.update_change_indicator)
