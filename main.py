@@ -37,8 +37,11 @@ class FileCollectorApp:
     def __init__(self, root: ctk.CTk) -> None:
         self.root = root
         self.root.title("File Collector App")
-        ctk.set_appearance_mode("System")
+        ctk.set_appearance_mode("System")  # This remains the same
         ctk.set_default_color_theme("blue")
+
+        # Define color schemes for light and dark modes
+        self._define_color_schemes()
 
         # Initialize variables
         self.projects: Dict[str, Dict[str, Any]] = {}
@@ -63,21 +66,61 @@ class FileCollectorApp:
             self.update_project_list()
             self.create_main_content_widgets()
 
+    def _define_color_schemes(self) -> None:
+        """Define color schemes for both light and dark modes"""
+        self.colors = {
+            "light": {
+                "sidebar_bg": "#f0f0f0",
+                "main_bg": "#ffffff",
+                "button_normal": "#3B8ED0",
+                "button_hover": "#36719F",
+                "button_selected": "#2D5F84",
+                "text": "black",
+                "label_bg": "#e0e0e0",
+                "status_up_to_date": "#28a745",
+                "status_changes": "#dc3545",
+                "folder_selected": "#e6e6e6"
+            },
+            "dark": {
+                "sidebar_bg": "#2b2b2b",
+                "main_bg": "#1a1a1a",
+                "button_normal": "#1F6AA5",
+                "button_hover": "#15507C",
+                "button_selected": "#0D3553",
+                "text": "white",
+                "label_bg": "#363636",
+                "status_up_to_date": "#198754",
+                "status_changes": "#dc3545",
+                "folder_selected": "#404040"
+            }
+        }
+
+    def _get_mode(self) -> str:
+        """Get current appearance mode"""
+        return ctk.get_appearance_mode().lower()
+
     def setup_gui(self) -> None:
         # Configure root window
         self.root.geometry("900x600")
 
-        # Create main frames
-        self.sidebar_frame = ctk.CTkFrame(self.root, width=200, corner_radius=0)
+        # Create main frames with appropriate colors
+        self.sidebar_frame = ctk.CTkFrame(
+            self.root,
+            width=200,
+            corner_radius=0,
+            fg_color=self.colors[self._get_mode()]["sidebar_bg"]
+        )
         self.sidebar_frame.pack(side="left", fill="y")
 
-        self.main_frame = ctk.CTkFrame(self.root, corner_radius=0)
+        self.main_frame = ctk.CTkFrame(
+            self.root,
+            corner_radius=0,
+            fg_color=self.colors[self._get_mode()]["main_bg"]
+        )
         self.main_frame.pack(side="right", fill="both", expand=True)
 
-        # Sidebar content
+        # Set up frames
         self.setup_sidebar()
-
-        # Main content area
         self.setup_main_content()
 
     def setup_sidebar(self) -> None:
@@ -115,14 +158,15 @@ class FileCollectorApp:
             widget.destroy()
 
         for project_name in self.projects.keys():
+            is_selected = project_name == self.current_project
             btn = ctk.CTkButton(
                 self.project_list_frame,
                 text=project_name,
                 command=lambda name=project_name: self.select_project(name),
                 width=160,
-                fg_color=("#3B8ED0", "#1F6AA5")
-                if project_name == self.current_project
-                else "transparent",
+                fg_color=self.colors[self._get_mode()]["button_selected"] if is_selected else "transparent",
+                hover_color=self.colors[self._get_mode()]["button_hover"],
+                text_color=self.colors[self._get_mode()]["text"]
             )
             btn.pack(pady=2, padx=5)
 
@@ -264,19 +308,26 @@ class FileCollectorApp:
         self.start_file_monitoring()
 
     def show_tab(self, tab_name: str) -> None:
+        mode = self._get_mode()
         # Hide all frames
         for frame in self.tab_frames.values():
             frame.pack_forget()
 
         # Deselect all buttons
         for btn in self.tab_buttons.values():
-            btn.configure(fg_color="transparent")
+            btn.configure(
+                fg_color="transparent",
+                hover_color=self.colors[mode]["button_hover"]
+            )
 
         # Show selected frame
         self.tab_frames[tab_name].pack(fill="both", expand=True)
 
         # Highlight selected button
-        self.tab_buttons[tab_name].configure(fg_color=("#3B8ED0", "#1F6AA5"))
+        self.tab_buttons[tab_name].configure(
+            fg_color=self.colors[mode]["button_selected"],
+            hover_color=self.colors[mode]["button_hover"]
+        )
 
     def setup_folders_tab(self) -> None:
         # Folder List (Using CTkScrollableFrame)
@@ -511,24 +562,23 @@ class FileCollectorApp:
         # Deselect all other labels
         for child in self.folder_list_frame.winfo_children():
             child.configure(fg_color="transparent")
-        # Select this label
-        folder_label.configure(fg_color=("gray75", "gray30"))
+        # Select this label with appropriate color
+        folder_label.configure(
+            fg_color=self.colors[self._get_mode()]["folder_selected"]
+        )
         self.selected_folder_label = folder_label
 
-    def add_folder(self) -> None:
-        folder_path = filedialog.askdirectory()
-        if folder_path:
-            existing_folders = [
-                child.cget("text") for child in self.folder_list_frame.winfo_children()
-            ]
-            if folder_path not in existing_folders:
-                self.add_folder_to_list(folder_path)
-                self.files_changed = True
-                self.update_change_indicator()
-                self.start_file_monitoring()
-                self.save_project()
-            else:
-                messagebox.showinfo("Info", "Folder already added.")
+    def add_folder_to_list(self, folder_path: str) -> None:
+        folder_label = ctk.CTkLabel(
+            self.folder_list_frame,
+            text=folder_path,
+            anchor="w",
+            width=400,
+            fg_color="transparent",
+            text_color=self.colors[self._get_mode()]["text"]
+        )
+        folder_label.pack(fill="x", padx=5, pady=2)
+        folder_label.bind("<Button-1>", lambda e: self.select_folder(folder_label))
 
     def remove_folder(self) -> None:
         if hasattr(self, "selected_folder_label") and self.selected_folder_label:
@@ -625,15 +675,18 @@ class FileCollectorApp:
             time.sleep(1)
 
     def update_change_indicator(self) -> None:
+        mode = self._get_mode()
         if self.files_changed:
             self.change_indicator.configure(
                 text="Status: Changes detected",
-                fg_color=("red", "darkred"),
+                fg_color=self.colors[mode]["status_changes"],
+                text_color="white"
             )
         else:
             self.change_indicator.configure(
                 text="Status: Up-to-date",
-                fg_color=("green", "darkgreen"),
+                fg_color=self.colors[mode]["status_up_to_date"],
+                text_color="white"
             )
 
     def open_output_folder(self) -> None:
