@@ -45,7 +45,7 @@ jobs:
       shell: bash
       run: |
         if [[ "${{ matrix.platform }}" == "macos" ]]; then
-          pyinstaller --onefile --windowed --name file_collector_app-${{ matrix.platform }} main.py --target-architecture universal2
+          pyinstaller --onefile --name file_collector_app-${{ matrix.platform }} main.py
         else
           pyinstaller --onefile --windowed --name file_collector_app-${{ matrix.platform }} main.py
         fi
