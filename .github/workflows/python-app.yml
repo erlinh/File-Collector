@@ -42,8 +42,13 @@ jobs:
         pip install pyinstaller
 
     - name: Build executable
+      shell: bash
       run: |
-        pyinstaller --onefile --windowed -i NONE --name file_collector_app-${{ matrix.platform }} main.py
+        if [[ "${{ matrix.platform }}" == "macos" ]]; then
+          pyinstaller --onefile --windowed --name file_collector_app-${{ matrix.platform }} main.py --target-architecture universal2
+        else
+          pyinstaller --onefile --windowed --name file_collector_app-${{ matrix.platform }} main.py
+        fi
         cp presets.json dist/presets.json
 
     # Package release for Windows
