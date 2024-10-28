@@ -22,6 +22,27 @@ except ImportError:
 
 logging.basicConfig(level=logging.INFO)
 
+# Configure default colors for light and dark mode
+COLORS = {
+    "light": {
+        "text": "#1a1a1a",  # Darker text for better contrast in light mode
+        "secondary_text": "#404040",  # Dark gray for secondary text
+        "selected_bg": "#e6e6e6",  # Light gray for selected items
+        "status_success": "#2d8a2d",  # Darker green for better visibility
+        "status_warning": "#cc3300",  # Darker red for better visibility
+        "folder_text": "#1a1a1a",  # Dark text for folder list
+        "button_hover": "#d9d9d9",  # Light gray for button hover
+    },
+    "dark": {
+        "text": "#ffffff",
+        "secondary_text": "#d1d1d1",
+        "selected_bg": "#404040",
+        "status_success": "#33cc33",
+        "status_warning": "#ff4d4d",
+        "folder_text": "#ffffff",
+        "button_hover": "#4d4d4d",
+    }
+}
 
 class FileChangeHandler(FileSystemEventHandler):
     def __init__(self, app):
@@ -32,17 +53,20 @@ class FileChangeHandler(FileSystemEventHandler):
         # Schedule the files_changed update on the main thread
         self.app.root.after(0, self.app.set_files_changed)
 
-
 class FileCollectorApp:
     def __init__(self, root: ctk.CTk) -> None:
         self.root = root
         self.root.title("File Collector App")
-        ctk.set_appearance_mode("System")  # This remains the same
+        
+        # Load settings
+        self.settings = self.load_settings()
+        
+        # Set appearance mode from settings
+        ctk.set_appearance_mode(self.settings.get("theme", "System"))
         ctk.set_default_color_theme("blue")
-
-        # Define color schemes for light and dark modes
-        self._define_color_schemes()
-
+        
+        self.update_theme_colors()
+        
         # Initialize variables
         self.projects: Dict[str, Dict[str, Any]] = {}
         self.presets: Dict[str, Dict[str, str]] = {}
@@ -52,7 +76,7 @@ class FileCollectorApp:
         self.observer: Optional[Observer] = None
         self.files_changed: bool = False
         self.output_files: List[str] = []
-        self.lock = threading.Lock()  # For thread safety
+        self.lock = threading.Lock()
 
         self.load_presets()
         self.load_projects()
@@ -65,62 +89,92 @@ class FileCollectorApp:
             self.current_project = list(self.projects.keys())[0]
             self.update_project_list()
             self.create_main_content_widgets()
+            
+        # Bind theme change event
+        self.root.bind("<<ThemeChanged>>", self.on_theme_change)
 
-    def _define_color_schemes(self) -> None:
-        """Define color schemes for both light and dark modes"""
-        self.colors = {
-            "light": {
-                "sidebar_bg": "#f0f0f0",
-                "main_bg": "#ffffff",
-                "button_normal": "#3B8ED0",
-                "button_hover": "#36719F",
-                "button_selected": "#2D5F84",
-                "text": "black",
-                "label_bg": "#e0e0e0",
-                "status_up_to_date": "#28a745",
-                "status_changes": "#dc3545",
-                "folder_selected": "#e6e6e6"
-            },
-            "dark": {
-                "sidebar_bg": "#2b2b2b",
-                "main_bg": "#1a1a1a",
-                "button_normal": "#1F6AA5",
-                "button_hover": "#15507C",
-                "button_selected": "#0D3553",
-                "text": "white",
-                "label_bg": "#363636",
-                "status_up_to_date": "#198754",
-                "status_changes": "#dc3545",
-                "folder_selected": "#404040"
-            }
-        }
+    def load_settings(self) -> Dict:
+        if os.path.exists("settings.json"):
+            try:
+                with open("settings.json", "r") as f:
+                    return json.load(f)
+            except:
+                return {"theme": "System"}
+        return {"theme": "System"}
 
-    def _get_mode(self) -> str:
-        """Get current appearance mode"""
-        return ctk.get_appearance_mode().lower()
+    def save_settings(self) -> None:
+        try:
+            with open("settings.json", "w") as f:
+                json.dump(self.settings, f)
+        except Exception as e:
+            logging.error(f"Failed to save settings: {e}")
+
+    def update_theme_colors(self):
+        appearance_mode = ctk.get_appearance_mode().lower()
+        self.colors = COLORS[appearance_mode]
+
+    def on_theme_change(self, event=None):
+        self.update_theme_colors()
+        self.refresh_ui_colors()
+
+    def toggle_theme(self):
+        current_theme = ctk.get_appearance_mode()
+        new_theme = "Light" if current_theme == "Dark" else "Dark"
+        ctk.set_appearance_mode(new_theme)
+        self.settings["theme"] = new_theme
+        self.save_settings()
+        self.update_theme_colors()
+        self.refresh_ui_colors()
+
+    def refresh_ui_colors(self):
+        # Update colors for existing widgets
+        if hasattr(self, 'sidebar_frame'):
+            for widget in self.sidebar_frame.winfo_children():
+                if isinstance(widget, ctk.CTkLabel):
+                    widget.configure(text_color=self.colors["text"])
+                elif isinstance(widget, ctk.CTkButton):
+                    widget.configure(text_color=self.colors["text"])
+
+        if hasattr(self, 'folder_list_frame'):
+            for widget in self.folder_list_frame.winfo_children():
+                widget.configure(text_color=self.colors["folder_text"])
+
+        if hasattr(self, 'change_indicator'):
+            if self.files_changed:
+                self.change_indicator.configure(
+                    text_color=self.colors["text"],
+                    fg_color=self.colors["status_warning"]
+                )
+            else:
+                self.change_indicator.configure(
+                    text_color=self.colors["text"],
+                    fg_color=self.colors["status_success"]
+                )
 
     def setup_gui(self) -> None:
         # Configure root window
         self.root.geometry("900x600")
 
-        # Create main frames with appropriate colors
-        self.sidebar_frame = ctk.CTkFrame(
-            self.root,
-            width=200,
-            corner_radius=0,
-            fg_color=self.colors[self._get_mode()]["sidebar_bg"]
-        )
+        # Create main frames with updated colors
+        self.sidebar_frame = ctk.CTkFrame(self.root, width=200, corner_radius=0)
         self.sidebar_frame.pack(side="left", fill="y")
 
-        self.main_frame = ctk.CTkFrame(
-            self.root,
-            corner_radius=0,
-            fg_color=self.colors[self._get_mode()]["main_bg"]
-        )
+        self.main_frame = ctk.CTkFrame(self.root, corner_radius=0)
         self.main_frame.pack(side="right", fill="both", expand=True)
 
-        # Set up frames
+        # Theme switch in sidebar
+        self.theme_switch = ctk.CTkButton(
+            self.sidebar_frame,
+            text="Toggle Theme",
+            command=self.toggle_theme,
+            width=160
+        )
+        self.theme_switch.pack(pady=10, padx=10)
+
+        # Sidebar content
         self.setup_sidebar()
+
+        # Main content area
         self.setup_main_content()
 
     def setup_sidebar(self) -> None:
@@ -151,48 +205,6 @@ class FileCollectorApp:
 
         # Load projects into the list
         self.update_project_list()
-
-    def update_project_list(self) -> None:
-        # Clear existing project buttons
-        for widget in self.project_list_frame.winfo_children():
-            widget.destroy()
-
-        for project_name in self.projects.keys():
-            is_selected = project_name == self.current_project
-            btn = ctk.CTkButton(
-                self.project_list_frame,
-                text=project_name,
-                command=lambda name=project_name: self.select_project(name),
-                width=160,
-                fg_color=self.colors[self._get_mode()]["button_selected"] if is_selected else "transparent",
-                hover_color=self.colors[self._get_mode()]["button_hover"],
-                text_color=self.colors[self._get_mode()]["text"]
-            )
-            btn.pack(pady=2, padx=5)
-
-    def select_project(self, project_name: str) -> None:
-        self.current_project = project_name
-        self.update_project_list()
-        self.create_main_content_widgets()
-        # Restart the file monitoring when project changes
-        self.start_file_monitoring()
-
-    def delete_project(self) -> None:
-        if not self.current_project:
-            messagebox.showwarning("No Selection", "Please select a project to delete.")
-            return
-
-        confirm = messagebox.askyesno(
-            "Delete Project", f"Are you sure you want to delete '{self.current_project}'?"
-        )
-        if confirm:
-            del self.projects[self.current_project]
-            self.save_projects_to_file()
-            self.current_project = None
-            self.update_project_list()
-            self.create_main_content_widgets()
-            # Stop file monitoring
-            self.stop_file_monitoring()
 
     def setup_main_content(self) -> None:
         self.main_content_frame = ctk.CTkFrame(self.main_frame)
@@ -225,7 +237,7 @@ class FileCollectorApp:
         self.change_indicator = ctk.CTkLabel(
             self.main_content_frame,
             text="Status: Up-to-date",
-            fg_color=("green", "darkgreen"),
+            fg_color=self.colors["status_success"],
             corner_radius=5,
             font=ctk.CTkFont(size=12),
             width=150,
@@ -279,8 +291,6 @@ class FileCollectorApp:
         action_frame = ctk.CTkFrame(self.main_content_frame)
         action_frame.pack(pady=10)
 
-        # Removed the Save Project button as per the requirement
-
         self.run_btn = ctk.CTkButton(
             action_frame, text="Run", command=self.run_file_collection, width=150
         )
@@ -306,28 +316,6 @@ class FileCollectorApp:
 
         self.load_project_settings()
         self.start_file_monitoring()
-
-    def show_tab(self, tab_name: str) -> None:
-        mode = self._get_mode()
-        # Hide all frames
-        for frame in self.tab_frames.values():
-            frame.pack_forget()
-
-        # Deselect all buttons
-        for btn in self.tab_buttons.values():
-            btn.configure(
-                fg_color="transparent",
-                hover_color=self.colors[mode]["button_hover"]
-            )
-
-        # Show selected frame
-        self.tab_frames[tab_name].pack(fill="both", expand=True)
-
-        # Highlight selected button
-        self.tab_buttons[tab_name].configure(
-            fg_color=self.colors[mode]["button_selected"],
-            hover_color=self.colors[mode]["button_hover"]
-        )
 
     def setup_folders_tab(self) -> None:
         # Folder List (Using CTkScrollableFrame)
@@ -474,79 +462,20 @@ class FileCollectorApp:
             )
             copy_content_btn.pack(side="right", padx=5)
 
-    def copy_to_clipboard(self, text: str) -> None:
-        self.root.clipboard_clear()
-        self.root.clipboard_append(text)
-        messagebox.showinfo("Copied", "Path copied to clipboard.")
+    def show_tab(self, tab_name: str) -> None:
+        # Hide all frames
+        for frame in self.tab_frames.values():
+            frame.pack_forget()
 
-    def copy_file_content(self, file_path: str) -> None:
-        try:
-            with open(file_path, "r", encoding="utf-8") as f:
-                content = f.read()
-            self.root.clipboard_clear()
-            self.root.clipboard_append(content)
-            messagebox.showinfo("Copied", "File content copied to clipboard.")
-        except Exception as e:
-            logging.error(f"Failed to copy content: {e}")
-            messagebox.showerror("Error", "Failed to copy file content.")
+        # Deselect all buttons
+        for btn in self.tab_buttons.values():
+            btn.configure(fg_color="transparent")
 
-    def create_new_project(self) -> None:
-        project_name = simpledialog.askstring(
-            "Project Name", "Enter a name for the new project:"
-        )
-        if project_name:
-            project_name = project_name.strip()
-            if not project_name:
-                messagebox.showerror("Error", "Project name cannot be empty.")
-                return
-            if project_name in self.projects:
-                messagebox.showerror(
-                    "Error", "A project with this name already exists."
-                )
-                return
-            self.projects[project_name] = {
-                "folders": [],
-                "ignore_folders": [],
-                "ignore_filetypes": [],
-                "ignore_filenames": [],
-                "output_path": "",
-                "max_file_size": 1024,
-                "presets": [],
-                "auto_run": False,
-            }
-            self.current_project = project_name
-            self.save_projects_to_file()
-            self.update_project_list()
-            self.create_main_content_widgets()
+        # Show selected frame
+        self.tab_frames[tab_name].pack(fill="both", expand=True)
 
-    def load_project_settings(self, event=None) -> None:
-        if self.current_project in self.projects:
-            project = self.projects[self.current_project]
-            # Load folders
-            for widget in self.folder_list_frame.winfo_children():
-                widget.destroy()
-            for folder in project["folders"]:
-                self.add_folder_to_list(folder)
-            # Load ignore settings
-            self.ignore_folders_var.set(",".join(project["ignore_folders"]))
-            self.ignore_filetypes_var.set(",".join(project["ignore_filetypes"]))
-            self.ignore_filenames_var.set(",".join(project["ignore_filenames"]))
-            # Load output settings
-            self.output_path_var.set(project["output_path"])
-            self.max_file_size_var.set(str(project.get("max_file_size", 1024)))
-            # Load presets
-            selected_presets = project.get("presets", [])
-            for preset_name, var in self.preset_vars.items():
-                if preset_name in selected_presets:
-                    var.set(True)
-                else:
-                    var.set(False)
-            self.update_ignore_settings_from_presets()
-            # Load auto-run setting
-            self.auto_run_var.set(project.get("auto_run", False))
-            self.files_changed = False
-            self.update_change_indicator()
-            self.update_output_files_tab()
+        # Highlight selected button
+        self.tab_buttons[tab_name].configure(fg_color=("#3B8ED0", "#1F6AA5"))
 
     def add_folder_to_list(self, folder_path: str) -> None:
         folder_label = ctk.CTkLabel(
@@ -554,6 +483,7 @@ class FileCollectorApp:
             text=folder_path,
             anchor="w",
             width=400,
+            text_color=self.colors["folder_text"]
         )
         folder_label.pack(fill="x", padx=5, pady=2)
         folder_label.bind("<Button-1>", lambda e: self.select_folder(folder_label))
@@ -562,23 +492,24 @@ class FileCollectorApp:
         # Deselect all other labels
         for child in self.folder_list_frame.winfo_children():
             child.configure(fg_color="transparent")
-        # Select this label with appropriate color
-        folder_label.configure(
-            fg_color=self.colors[self._get_mode()]["folder_selected"]
-        )
+        # Select this label
+        folder_label.configure(fg_color=self.colors["selected_bg"])
         self.selected_folder_label = folder_label
 
-    def add_folder_to_list(self, folder_path: str) -> None:
-        folder_label = ctk.CTkLabel(
-            self.folder_list_frame,
-            text=folder_path,
-            anchor="w",
-            width=400,
-            fg_color="transparent",
-            text_color=self.colors[self._get_mode()]["text"]
-        )
-        folder_label.pack(fill="x", padx=5, pady=2)
-        folder_label.bind("<Button-1>", lambda e: self.select_folder(folder_label))
+    def add_folder(self) -> None:
+        folder_path = filedialog.askdirectory()
+        if folder_path:
+            existing_folders = [
+                child.cget("text") for child in self.folder_list_frame.winfo_children()
+            ]
+            if folder_path not in existing_folders:
+                self.add_folder_to_list(folder_path)
+                self.files_changed = True
+                self.update_change_indicator()
+                self.start_file_monitoring()
+                self.save_project()
+            else:
+                messagebox.showinfo("Info", "Folder already added.")
 
     def remove_folder(self) -> None:
         if hasattr(self, "selected_folder_label") and self.selected_folder_label:
@@ -597,7 +528,6 @@ class FileCollectorApp:
         output_path = filedialog.askdirectory()
         if output_path:
             self.output_path_var.set(output_path)
-            # self.save_project() will be called due to trace
 
     def update_ignore_settings_from_presets(self) -> None:
         ignore_folders = set()
@@ -650,7 +580,6 @@ class FileCollectorApp:
         if self.auto_run_var.get() and self.current_project:
             event_handler = FileChangeHandler(self)
             self.observer = Observer()
-            project = self.projects[self.current_project]
             folders = [child.cget("text") for child in self.folder_list_frame.winfo_children()]
             for folder in folders:
                 if os.path.exists(folder):
@@ -675,18 +604,17 @@ class FileCollectorApp:
             time.sleep(1)
 
     def update_change_indicator(self) -> None:
-        mode = self._get_mode()
         if self.files_changed:
             self.change_indicator.configure(
                 text="Status: Changes detected",
-                fg_color=self.colors[mode]["status_changes"],
-                text_color="white"
+                text_color=self.colors["text"],
+                fg_color=self.colors["status_warning"],
             )
         else:
             self.change_indicator.configure(
                 text="Status: Up-to-date",
-                fg_color=self.colors[mode]["status_up_to_date"],
-                text_color="white"
+                text_color=self.colors["text"],
+                fg_color=self.colors["status_success"],
             )
 
     def open_output_folder(self) -> None:
@@ -777,6 +705,22 @@ class FileCollectorApp:
                 }
             }
 
+    def copy_to_clipboard(self, text: str) -> None:
+        self.root.clipboard_clear()
+        self.root.clipboard_append(text)
+        messagebox.showinfo("Copied", "Path copied to clipboard.")
+
+    def copy_file_content(self, file_path: str) -> None:
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            self.root.clipboard_clear()
+            self.root.clipboard_append(content)
+            messagebox.showinfo("Copied", "File content copied to clipboard.")
+        except Exception as e:
+            logging.error(f"Failed to copy content: {e}")
+            messagebox.showerror("Error", "Failed to copy file content.")
+
     def run_file_collection(self) -> None:
         if not self.current_project:
             self.root.after(0, lambda: messagebox.showerror("Error", "No project selected."))
@@ -844,9 +788,7 @@ class FileCollectorApp:
                         for file in files:
                             file_path = os.path.join(root, file)
                             file_ext = os.path.splitext(file)[1]
-                            if (file in ignore_filenames) or (
-                                file_ext in ignore_filetypes
-                            ):
+                            if (file in ignore_filenames) or (file_ext in ignore_filetypes):
                                 continue
                             if file_path.startswith(output_folder_path):
                                 continue
@@ -876,7 +818,7 @@ class FileCollectorApp:
         timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
         self.root.after(0, lambda: self.change_indicator.configure(
             text=f"Last run: {timestamp}",
-            fg_color=("green", "darkgreen"),
+            fg_color=self.colors["status_success"],
         ))
 
 if __name__ == "__main__":
