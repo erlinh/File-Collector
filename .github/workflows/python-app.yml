@@ -43,7 +43,7 @@ jobs:
 
     - name: Build executable
       run: |
-        pyinstaller --onefile --windowed --name file_collector_app-${{ matrix.platform }} main.py
+        pyinstaller --onefile --windowed --noicon --name file_collector_app-${{ matrix.platform }} main.py
         cp presets.json dist/presets.json
 
     # Package release for Windows
