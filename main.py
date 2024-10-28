@@ -177,6 +177,27 @@ class FileCollectorApp:
         # Main content area
         self.setup_main_content()
 
+    def create_new_project(self) -> None:
+        project_name = simpledialog.askstring("New Project", "Enter project name:")
+        if project_name:
+            if project_name in self.projects:
+                messagebox.showerror("Error", "Project name already exists.")
+                return
+            self.projects[project_name] = {
+                "folders": [],
+                "ignore_folders": [],
+                "ignore_filetypes": [],
+                "ignore_filenames": [],
+                "output_path": "",
+                "max_file_size": 1024,
+                "presets": [],
+                "auto_run": False,
+            }
+            self.current_project = project_name
+            self.save_projects_to_file()
+            self.update_project_list()
+            self.create_main_content_widgets()
+
     def setup_sidebar(self) -> None:
         # Sidebar Title
         sidebar_label = ctk.CTkLabel(
@@ -205,6 +226,52 @@ class FileCollectorApp:
 
         # Load projects into the list
         self.update_project_list()
+
+    def delete_project(self) -> None:
+        if not self.current_project:
+            messagebox.showwarning("No Project", "Please select a project first.")
+            return
+        
+        confirm = messagebox.askyesno(
+            "Confirm Delete",
+            f"Are you sure you want to delete project '{self.current_project}'?"
+        )
+        if confirm:
+            del self.projects[self.current_project]
+            self.save_projects_to_file()
+            
+            # Select a new current project if any exist
+            if self.projects:
+                self.current_project = list(self.projects.keys())[0]
+            else:
+                self.current_project = None
+                
+            self.update_project_list()
+            self.create_main_content_widgets()
+
+    def update_project_list(self) -> None:
+        # Clear existing projects
+        for widget in self.project_list_frame.winfo_children():
+            widget.destroy()
+
+        # Add projects to the list
+        for project_name in sorted(self.projects.keys()):
+            button = ctk.CTkButton(
+                self.project_list_frame,
+                text=project_name,
+                command=lambda p=project_name: self.select_project(p),
+                fg_color="transparent",
+                text_color=self.colors["text"],
+            )
+            button.pack(fill="x", padx=5, pady=2)
+            if project_name == self.current_project:
+                button.configure(fg_color=self.colors["selected_bg"])
+
+    def select_project(self, project_name: str) -> None:
+        self.current_project = project_name
+        self.update_project_list()
+        self.create_main_content_widgets()
+        self.load_project_settings()
 
     def setup_main_content(self) -> None:
         self.main_content_frame = ctk.CTkFrame(self.main_frame)
@@ -316,6 +383,39 @@ class FileCollectorApp:
 
         self.load_project_settings()
         self.start_file_monitoring()
+
+    def load_project_settings(self) -> None:
+        if not self.current_project:
+            return
+            
+        project = self.projects[self.current_project]
+        
+        # Clear existing folders
+        for widget in self.folder_list_frame.winfo_children():
+            widget.destroy()
+
+        # Load folders
+        for folder in project.get("folders", []):
+            self.add_folder_to_list(folder)
+
+        # Load ignore settings
+        self.ignore_folders_var.set(",".join(project.get("ignore_folders", [])))
+        self.ignore_filetypes_var.set(",".join(project.get("ignore_filetypes", [])))
+        self.ignore_filenames_var.set(",".join(project.get("ignore_filenames", [])))
+
+        # Load output settings
+        self.output_path_var.set(project.get("output_path", ""))
+        self.max_file_size_var.set(str(project.get("max_file_size", 1024)))
+
+        # Load auto-run setting
+        self.auto_run_var.set(project.get("auto_run", False))
+
+        # Load presets
+        for preset_name, var in self.preset_vars.items():
+            var.set(preset_name in project.get("presets", []))
+
+        if self.auto_run_var.get():
+            self.start_file_monitoring()
 
     def setup_folders_tab(self) -> None:
         # Folder List (Using CTkScrollableFrame)
